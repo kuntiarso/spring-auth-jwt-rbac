@@ -41,9 +41,9 @@ tasks.named('test') {
 }
 
 flyway {
-    url = project.property('spring.datasource.url')
-    user = project.property('spring.datasource.username')
-    password = project.property('spring.datasource.password')
-	schemas = [project.property('spring.jpa.properties.hibernate.default_schema')]
+    url = "jdbc:${env.DB_PROVIDER.value}://${env.DB_HOST.value}:${env.DB_PORT.value}/${env.DB_NAME.value}?useSSL=false"
+    user = env.DB_USERNAME.value
+    password = env.DB_PASSWORD.value
+	schemas = [env.DB_NAME.value]
     locations = ['classpath:database/migrations']
 }
