@@ -2,16 +2,16 @@ package com.kuntia.springauthjwtrbac.user;
 
 import org.springframework.stereotype.Service;
 
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 
 @Service
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class UserService {
 
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
 
     public User getUser(String email) {
-        return userRepository.findFirstByEmail(email).orElseThrow();
+        return userRepository.findByEmail(email).orElseThrow();
     }
 
 }

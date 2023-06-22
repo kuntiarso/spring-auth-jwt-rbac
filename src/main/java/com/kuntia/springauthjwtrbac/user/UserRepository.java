@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
-    Optional<User> findFirstByEmail(String email);
+    long countByEmail(String email);
+
+    Optional<User> findByEmail(String email);
 
 }
