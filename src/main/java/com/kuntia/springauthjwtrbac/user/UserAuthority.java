@@ -1,25 +1,25 @@
-package com.kuntia.springauthjwtrbac.auth;
+package com.kuntia.springauthjwtrbac.user;
 
 import java.util.Collection;
-import java.util.List;
 
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import com.kuntia.springauthjwtrbac.user.User;
-
-public class Auth implements UserDetails {
+public class UserAuthority implements UserDetails {
 
     private final User user;
 
-    public Auth(User user) {
+    public UserAuthority(User user) {
         this.user = user;
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority(user.getRole().name()));
+        return user.getRoles()
+                .stream()
+                .map(role -> new SimpleGrantedAuthority(role.getName().name()))
+                .toList();
     }
 
     @Override

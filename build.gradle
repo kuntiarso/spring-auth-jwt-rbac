@@ -33,6 +33,7 @@ dependencies {
 	implementation 'commons-codec:commons-codec:1.15'
 	implementation 'org.bouncycastle:bcprov-jdk15on:1.70'
 
+
 	compileOnly 'org.projectlombok:lombok'
 
 	runtimeOnly 'com.mysql:mysql-connector-j'

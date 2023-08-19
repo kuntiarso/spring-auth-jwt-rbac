@@ -11,10 +11,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.kuntia.springauthjwtrbac.auth.dto.AuthResponseDto;
-import com.kuntia.springauthjwtrbac.auth.dto.LoginRequestDto;
-import com.kuntia.springauthjwtrbac.auth.dto.RegisterRequestDto;
+import com.kuntia.springauthjwtrbac.auth.dto.AuthResponse;
+import com.kuntia.springauthjwtrbac.auth.dto.LoginRequest;
+import com.kuntia.springauthjwtrbac.auth.dto.RegisterRequest;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -34,17 +35,14 @@ public class AuthController {
     @Value("${COOKIE_REFRESH_MAX_AGE}")
     private long cookieRefreshMaxAge;
 
-    @Value("${COOKIE_VERIFICATION_MAX_AGE}")
-    private long cookieVerificationMaxAge;
-
     private final AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthResponseDto> register(@RequestBody RegisterRequestDto dto) {
-        var tokens = authService.register(dto);
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest body) {
+        var result = authService.register(body);
 
         ResponseCookie cookie = ResponseCookie
-                .from("refreshToken", tokens.getRefreshToken())
+                .from("refreshToken", result.getRefreshToken())
                 .secure(cookieSecure)
                 .httpOnly(cookieHttpOnly)
                 .sameSite(cookieSameSite)
@@ -54,15 +52,15 @@ public class AuthController {
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.SET_COOKIE, cookie.toString());
 
-        return new ResponseEntity<AuthResponseDto>(tokens, headers, HttpStatus.OK);
+        return new ResponseEntity<AuthResponse>(result, headers, HttpStatus.OK);
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponseDto> login(@RequestBody LoginRequestDto dto) {
-        var tokens = authService.login(dto);
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest body) {
+        var result = authService.login(body);
 
         ResponseCookie cookie = ResponseCookie
-                .from("refreshToken", tokens.getRefreshToken())
+                .from("refreshToken", result.getRefreshToken())
                 .secure(cookieSecure)
                 .httpOnly(cookieHttpOnly)
                 .sameSite(cookieSameSite)
@@ -72,13 +70,13 @@ public class AuthController {
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.SET_COOKIE, cookie.toString());
 
-        return new ResponseEntity<AuthResponseDto>(tokens, headers, HttpStatus.OK);
+        return new ResponseEntity<AuthResponse>(result, headers, HttpStatus.OK);
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<AuthResponseDto> refresh(@CookieValue("refreshToken") String refreshToken) {
+    public ResponseEntity<AuthResponse> refresh(@CookieValue("refreshToken") String refreshToken) {
         var tokens = authService.refresh(refreshToken);
-        return new ResponseEntity<AuthResponseDto>(tokens, HttpStatus.OK);
+        return new ResponseEntity<AuthResponse>(tokens, HttpStatus.OK);
     }
 
 }

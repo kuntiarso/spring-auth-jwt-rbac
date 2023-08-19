@@ -1,5 +1,8 @@
 package com.kuntia.springauthjwtrbac.auth.dto;
 
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -9,11 +12,13 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class RegisterRequestDto {
+public class LoginRequest {
 
-    private String firstName;
-    private String lastName;
+    @Email
     private String email;
+
+    @NotBlank
+    @Size(min = 8)
     private String password;
 
 }

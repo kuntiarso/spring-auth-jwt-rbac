@@ -1,15 +1,18 @@
 package com.kuntia.springauthjwtrbac.user;
 
 import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
 
-import com.kuntia.springauthjwtrbac.auth.Role;
 import com.kuntia.springauthjwtrbac.util.BaseEntity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,6 +33,8 @@ import lombok.ToString;
 @AllArgsConstructor
 public class User extends BaseEntity {
 
+    private String firstName;
+    private String lastName;
     private String username;
 
     @Column(nullable = false)
@@ -41,21 +46,13 @@ public class User extends BaseEntity {
     private String refreshToken;
     private String verificationToken;
 
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(name = "user_roles", joinColumns = @JoinColumn(name = "userId"), inverseJoinColumns = @JoinColumn(name = "roleId"))
+    @Builder.Default
+    private Set<Role> roles = new HashSet<>();
+
     @Column(length = 6)
     private String otp;
-    private String firstName;
-    private String lastName;
-    private String phone;
-    private String profilePicture;
-
-    @Enumerated(EnumType.STRING)
-    @Column(columnDefinition = "enum", nullable = false)
-    @Builder.Default
-    private Role role = Role.UNASSIGNED;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean isVerified = false;
     private Date verifiedDate;
 
 }

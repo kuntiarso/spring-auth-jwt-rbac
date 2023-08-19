@@ -1,20 +1,27 @@
 package com.kuntia.springauthjwtrbac.auth;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.kuntia.springauthjwtrbac.auth.dto.AuthResponseDto;
-import com.kuntia.springauthjwtrbac.auth.dto.LoginRequestDto;
-import com.kuntia.springauthjwtrbac.auth.dto.RegisterRequestDto;
+import com.kuntia.springauthjwtrbac.auth.dto.AuthResponse;
+import com.kuntia.springauthjwtrbac.auth.dto.LoginRequest;
+import com.kuntia.springauthjwtrbac.auth.dto.RegisterRequest;
 import com.kuntia.springauthjwtrbac.auth.jwt.JwtAccessService;
 import com.kuntia.springauthjwtrbac.auth.jwt.JwtRefreshService;
+import com.kuntia.springauthjwtrbac.user.UserAuthority;
+import com.kuntia.springauthjwtrbac.user.ERole;
+import com.kuntia.springauthjwtrbac.user.Role;
+import com.kuntia.springauthjwtrbac.user.RoleRepository;
 import com.kuntia.springauthjwtrbac.user.User;
 import com.kuntia.springauthjwtrbac.user.UserRepository;
 import com.kuntia.springauthjwtrbac.util.EncryptionUtils;
@@ -35,87 +42,108 @@ public class AuthService {
     private String appIv;
 
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtAccessService jwtAccessService;
     private final JwtRefreshService jwtRefreshService;
-    private final UserDetailsService userDetailsService;
     private final AuthenticationManager authenticationManager;
 
-    public AuthResponseDto register(RegisterRequestDto dto) {
-        var emailExists = userRepository.countByEmail(dto.getEmail());
-        if (emailExists > 0) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "this email already exists");
+    @Transactional
+    public AuthResponse register(RegisterRequest body) {
+        if (userRepository.existsByUsername(body.getUsername())) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Error:: this username already exists");
+        }
+        if (userRepository.existsByEmail(body.getEmail())) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Error:: this email already exists");
         }
 
-        var decryptedPassword = EncryptionUtils.decrypt(dto.getPassword(), appKey, appAlgorithm, appIv);
+        var decryptedPassword = EncryptionUtils.decrypt(body.getPassword(), appKey, appAlgorithm, appIv);
         var passwordHash = passwordEncoder.encode(decryptedPassword);
         var user = User.builder()
-                .firstName(dto.getFirstName())
-                .lastName(dto.getLastName())
-                .email(dto.getEmail())
+                .firstName(body.getFirstName())
+                .lastName(body.getLastName())
+                .username(body.getUsername())
+                .email(body.getEmail())
                 .password(passwordHash)
-                .role(Role.UNASSIGNED)
                 .build();
 
+        Set<String> inputRoles = body.getRoles();
+        Set<Role> roles = new HashSet<>();
+
+        if (inputRoles == null) {
+            Role viewerRole = roleRepository.findByName(ERole.ROLE_VIEWER)
+                    .orElseThrow(() -> new RuntimeException("Error:: role is not found"));
+            roles.add(viewerRole);
+        } else {
+            inputRoles.forEach(role -> {
+                switch (role) {
+                    case "ADMIN":
+                        Role adminRole = roleRepository.findByName(ERole.ROLE_ADMIN)
+                                .orElseThrow(() -> new RuntimeException("Error:: role is not found"));
+                        roles.add(adminRole);
+                        break;
+                    case "EDITOR":
+                        Role editorRole = roleRepository.findByName(ERole.ROLE_EDITOR)
+                                .orElseThrow(() -> new RuntimeException("Error:: role is not found"));
+                        roles.add(editorRole);
+                        break;
+                    default:
+                        Role viewerRole = roleRepository.findByName(ERole.ROLE_VIEWER)
+                                .orElseThrow(() -> new RuntimeException("Error:: role is not found"));
+                        roles.add(viewerRole);
+                        break;
+                }
+            });
+        }
+
+        user.setRoles(roles);
         userRepository.save(user);
 
-        return this.login(new LoginRequestDto(dto.getEmail(), dto.getPassword()));
-
-        // TODO: should send verification email and return tokens with user data
+        return this.login(new LoginRequest(body.getEmail(), body.getPassword()));
     }
 
-    public AuthResponseDto login(LoginRequestDto dto) {
-        var decryptedPassword = EncryptionUtils.decrypt(dto.getPassword(), appKey, appAlgorithm, appIv);
-        var authenticationToken = new UsernamePasswordAuthenticationToken(dto.getEmail(), decryptedPassword);
+    public AuthResponse login(LoginRequest body) {
+        var decryptedPassword = EncryptionUtils.decrypt(body.getPassword(), appKey, appAlgorithm, appIv);
+        var authenticationToken = new UsernamePasswordAuthenticationToken(body.getEmail(), decryptedPassword);
+        var authentication = authenticationManager.authenticate(authenticationToken);
 
-        authenticationManager.authenticate(authenticationToken);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        var user = userRepository.findByEmail(dto.getEmail())
+        var user = userRepository.findByEmail(body.getEmail())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "incorrect credentials"));
 
-        var accessToken = jwtAccessService.signToken(new Auth(user));
-        var refreshToken = jwtRefreshService.signToken(new Auth(user));
+        var accessToken = jwtAccessService.signToken(new UserAuthority(user));
+        var refreshToken = jwtRefreshService.signToken(new UserAuthority(user));
 
         user.setRefreshToken(passwordEncoder.encode(refreshToken));
         userRepository.save(user);
 
-        return AuthResponseDto.builder()
+        return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .build();
-
-        // TODO: should return tokens with user data
     }
 
-    public AuthResponseDto refresh(String refreshToken) {
-        final String emailFromJwt = jwtRefreshService.extractUsername(refreshToken);
-        if (emailFromJwt == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid refresh token");
+    public AuthResponse refresh(String refreshToken) {
+        if (jwtRefreshService.validateToken(refreshToken)) {
+            // NOTE: extractUsername here means get email value from token
+            var email = jwtRefreshService.extractUsername(refreshToken);
+            var user = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED,
+                            "Error:: invalid refresh token"));
+
+            var isMatchToken = passwordEncoder.matches(refreshToken, user.getRefreshToken());
+            if (!isMatchToken) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Error:: invalid refresh token");
+            }
+
+            var newAccessToken = jwtAccessService.signToken(new UserAuthority(user));
+            return AuthResponse.builder()
+                    .accessToken(newAccessToken)
+                    .build();
+        } else {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Error:: invalid refresh token");
         }
-
-        boolean isRefreshTokenExpired = jwtRefreshService.isTokenExpired(refreshToken);
-        if (isRefreshTokenExpired) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "refresh token has expired");
-        }
-
-        UserDetails userDetails = userDetailsService.loadUserByUsername(emailFromJwt);
-        boolean isRefreshTokenValid = jwtRefreshService.isTokenValid(refreshToken, userDetails);
-        if (!isRefreshTokenValid) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid refresh token");
-        }
-
-        var user = userRepository.findByEmail(emailFromJwt)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid refresh token"));
-
-        var isMatchToken = passwordEncoder.matches(refreshToken, user.getRefreshToken());
-        if (!isMatchToken) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid refresh token");
-        }
-
-        var newAccessToken = jwtAccessService.signToken(new Auth(user));
-        return AuthResponseDto.builder()
-                .accessToken(newAccessToken)
-                .build();
     }
 
 }

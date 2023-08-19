@@ -14,10 +14,7 @@ import lombok.RequiredArgsConstructor;
 public class LogoutService implements LogoutHandler {
 
     @Override
-    public void logout(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            Authentication authentication) {
+    public void logout(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
         Cookie cookie = new Cookie("refreshToken", null);
         cookie.setMaxAge(0);
         response.addCookie(cookie);
